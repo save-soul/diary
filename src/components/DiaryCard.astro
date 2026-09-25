@@ -1,0 +1,88 @@
+---
+import type { DiaryEntry } from "@/types";
+import { getDiaryPath } from "@/utils/getDiaryPath";
+import { slugifyStr } from "@/utils/slugify";
+import DiaryDate from "./DiaryDate.astro";
+import Tag from "./Tag.astro";
+
+export interface Props extends DiaryEntry {
+  variant?: "h2" | "h3";
+  /** 在时光轴的竖线上带一个节点圆点 */
+  rail?: boolean;
+}
+
+const { variant = "h2", rail = false, data, id } = Astro.props;
+
+const { title, description, pubDatetime, modDatetime, timezone, tags } = data;
+
+const href = getDiaryPath(id, data);
+
+const headerProps = {
+  style: { viewTransitionName: slugifyStr(title) },
+  class: "text-lg font-medium",
+};
+---
+
+<li
+  class:list={[
+    "relative",
+    rail ? "pb-8 last:pb-0" : "my-6",
+  ]}
+>
+  <div class="relative">
+    {
+      rail && (
+        <span
+          aria-hidden="true"
+          class="absolute -start-[29.5px] top-1/2 size-2.5 -translate-y-1/2 rounded-full bg-accent ring-4 ring-background"
+        />
+      )
+    }
+    <DiaryDate {pubDatetime} {modDatetime} {timezone} />
+  </div>
+  {/*
+    整条只保留一个链接（标题）：日期/摘要作为纯文本保留可选中，
+    标签各自是独立链接。不要把这些包进同一个 <a>，否则会产生嵌套链接的无效 HTML，
+    悬停标签也会连带触发整条的悬停态。
+  */}
+  <div class="mt-1 flex flex-wrap items-baseline gap-x-2">
+    {
+      data.featured && (
+        <span class="shrink-0 rounded border border-accent/40 px-1.5 text-[0.65rem] text-accent">
+          值得重读
+        </span>
+      )
+    }
+    {
+      variant === "h2" ? (
+        <h2 {...headerProps}>
+          <a
+            href={href}
+            class="decoration-dashed underline-offset-4 hover:underline"
+          >
+            {title}
+          </a>
+        </h2>
+      ) : (
+        <h3 {...headerProps}>
+          <a
+            href={href}
+            class="decoration-dashed underline-offset-4 hover:underline"
+          >
+            {title}
+          </a>
+        </h3>
+      )
+    }
+  </div>
+  <p class="mt-1 opacity-80">{description}</p>
+  {
+    tags.length > 0 && (
+      <ul class="mt-2 flex flex-wrap items-center gap-x-3">
+        {tags.map(tag => (
+          <Tag tag={slugifyStr(tag)} tagName={tag} />
+        ))}
+      </ul>
+    )
+  }
+</li>

@@ -1,0 +1,267 @@
+---
+import { getCollection } from "astro:content";
+import Main from "@/layouts/Main.astro";
+import Layout from "@/layouts/Layout.astro";
+import Header from "@/components/Header.astro";
+import Footer from "@/components/Footer.astro";
+import getSortedEntries from "@/utils/getSortedEntries";
+import { getDiaryPath } from "@/utils/getDiaryPath";
+import {
+  formatMonth,
+  getDiaryDate,
+  getMonthGrid,
+  getTodayISO,
+  getYearGrid,
+  WEEKDAYS_SHORT,
+} from "@/utils/date";
+import { countChars, formatChars } from "@/utils/readingStats";
+import { SITE } from "@/config";
+import type { DiaryEntry } from "@/types";
+
+export async function getStaticPaths() {
+  const entries = getSortedEntries(await getCollection("diary"));
+
+  const years = [
+    ...new Set(
+      entries.map(entry =>
+        getDiaryDate(entry.data.pubDatetime, entry.data.timezone).year()
+      )
+    ),
+  ].sort((a, b) => b - a);
+
+  return years.map((year, index) => ({
+    // 最新一年用 /calendar/，更早的年份用 /calendar/2025/
+    params: { year: index === 0 ? undefined : String(year) },
+    props: { year, years, latestYear: years[0] ?? year },
+  }));
+}
+
+interface Props {
+  year: number;
+  years: number[];
+  latestYear: number;
+}
+
+const { year, years, latestYear } = Astro.props;
+
+const entries = getSortedEntries(await getCollection("diary"));
+
+/** 本年条目按「记录日期」归组：同一天多则时按时间倒序放在一起 */
+const byDay = new Map<string, DiaryEntry[]>();
+for (const entry of entries) {
+  const date = getDiaryDate(entry.data.pubDatetime, entry.data.timezone);
+  if (date.year() !== year) continue;
+  const key = date.format("YYYY-MM-DD");
+  const list = byDay.get(key) ?? [];
+  list.push(entry);
+  byDay.set(key, list);
+}
+
+const yearDays = [...byDay.keys()].sort().reverse();
+const yearEntries = yearDays.flatMap(day => byDay.get(day) ?? []);
+const yearChars = yearEntries.reduce(
+  (sum, entry) => sum + countChars(entry.body ?? ""),
+  0
+);
+
+/** 记录最多的一年之内的月份，作为「最勤的一个月」 */
+const monthCounts = Array.from({ length: 12 }, (_, index) => ({
+  month: index + 1,
+  count: yearDays.filter(day => Number(day.slice(5, 7)) === index + 1).length,
+}));
+const busiestMonth = monthCounts.reduce(
+  (best, current) => (current.count > best.count ? current : best),
+  monthCounts[0]
+);
+
+const today = getTodayISO();
+const yearWeeks = getYearGrid(year);
+
+const summary = [
+  { label: "记录", value: `${yearDays.length}`, unit: "天" },
+  { label: "日记", value: `${yearEntries.length}`, unit: "则" },
+  { label: "篇幅", value: formatChars(yearChars), unit: "" },
+  {
+    label: "最勤",
+    value: busiestMonth.count > 0 ? formatMonth(busiestMonth.month) : "—",
+    unit: busiestMonth.count > 0 ? `${busiestMonth.count} 天` : "",
+  },
+];
+---
+
+<Layout
+  title={`日历 ${year} | ${SITE.title}`}
+  description={`${year} 年的记录日历：哪些日子写下过东西、一年里的记录密度，以及逐月的记录分布。`}
+>
+  <Header />
+  <Main pageTitle="日历" pageDesc="哪些日子写下了东西，一眼可见">
+    <nav aria-label="切换年份" class="flex flex-wrap items-center gap-2 text-sm">
+      {
+        years.map(item => (
+          <a
+            href={item === latestYear ? "/calendar/" : `/calendar/${item}/`}
+            aria-current={item === year ? "page" : undefined}
+            class:list={[
+              "rounded border px-3 py-1 transition-colors",
+              item === year
+                ? "border-accent text-accent"
+                : "border-border hover:text-accent",
+            ]}
+          >
+            {item} 年
+          </a>
+        ))
+      }
+    </nav>
+
+    <h2 class="mt-8 text-2xl font-semibold tracking-wide">{year} 年</h2>
+
+    <dl class="mt-4 grid grid-cols-2 gap-x-6 gap-y-5 rounded border border-border p-5 sm:grid-cols-4">
+      {
+        summary.map(({ label, value, unit }) => (
+          <div class="flex flex-col gap-1">
+            <dt class="text-xs tracking-wide opacity-70">{label}</dt>
+            <dd class="text-xl font-bold text-accent sm:text-2xl">
+              {value}
+              {unit && <span class="ms-1 text-sm font-normal opacity-70">{unit}</span>}
+            </dd>
+          </div>
+        ))
+      }
+    </dl>
+
+    <section class="mt-10">
+      <h3 class="mb-3 text-sm tracking-wide opacity-70">记录密度</h3>
+      {/* 热力图只是密度的视觉概览，可点击的入口在下面的月历里，故对辅助技术隐藏 */}
+      <div class="overflow-x-auto pb-1" aria-hidden="true">
+        <div class="grid grid-flow-col grid-rows-7 gap-1">
+          {
+            yearWeeks.flatMap(week =>
+              week.map(day =>
+                day === null ? (
+                  <span class="size-3" />
+                ) : byDay.has(day) ? (
+                  <span
+                    class="size-3 rounded-sm bg-accent"
+                    title={`${day} 有记录`}
+                  />
+                ) : (
+                  <span class="size-3 rounded-sm bg-muted/50" title={day} />
+                )
+              )
+            )
+          }
+        </div>
+      </div>
+      <p class="mt-2 text-xs opacity-70">
+        每一格是一天，一列为一周（周一到周日）；深色表示当天有记录。
+      </p>
+    </section>
+
+    <section class="mt-12">
+      <h3 class="mb-5 text-sm tracking-wide opacity-70">按月查看</h3>
+      <div class="grid grid-cols-1 gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
+        {
+          monthCounts.map(({ month, count }) => (
+            <table class="w-full border-collapse text-center text-xs">
+              <caption class="mb-2 text-left text-base font-bold">
+                {formatMonth(month)}
+                {count > 0 && (
+                  <sup class="ms-1 text-xs font-normal opacity-70">
+                    {count} 天
+                  </sup>
+                )}
+              </caption>
+              <thead>
+                <tr>
+                  {WEEKDAYS_SHORT.map(weekday => (
+                    <th
+                      scope="col"
+                      class="pb-1 font-normal opacity-70"
+                      abbr={`星期${weekday}`}
+                    >
+                      {weekday}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {getMonthGrid(year, month).map(week => (
+                  <tr>
+                    {week.map(cell => {
+                      if (!cell) return <td />;
+
+                      const dayOfMonth = Number(cell.slice(8));
+                      const list = byDay.get(cell) ?? [];
+                      const isToday = cell === today;
+
+                      if (list.length === 0) {
+                        return (
+                          <td
+                            class:list={[
+                              "py-1 opacity-70",
+                              {
+                                "rounded border border-dashed border-accent":
+                                  isToday,
+                              },
+                            ]}
+                          >
+                            {dayOfMonth}
+                          </td>
+                        );
+                      }
+
+                      const entry = list[0];
+                      const hasMultiple = list.length > 1;
+                      /*
+                        一天多则时，格子上那个上标数字是纯视觉的（aria-label 会覆盖链接内部的文本），
+                        所以把则数写进 label 与 title，否则读屏与悬停提示都以为这天只有一则。
+                        链接仍指向当天最近的一则，这一点也一并说明。
+                      */
+                      const dayLabel = `${year} 年 ${month} 月 ${dayOfMonth} 日`;
+                      const entryLabel = `${dayLabel}：${entry.data.title}${
+                        hasMultiple
+                          ? `（当天 ${list.length} 则，此链接为最近的一则）`
+                          : ""
+                      }`;
+
+                      return (
+                        <td class="p-0.5">
+                          <a
+                            href={getDiaryPath(entry.id, entry.data)}
+                            class:list={[
+                              "block rounded bg-accent/15 py-1 font-medium text-accent hover:bg-accent hover:text-background",
+                              { "ring-1 ring-accent": isToday },
+                            ]}
+                            title={`${dayOfMonth} 日 · ${entry.data.title}${
+                              hasMultiple ? `（当天 ${list.length} 则）` : ""
+                            }`}
+                            aria-label={entryLabel}
+                          >
+                            {dayOfMonth}
+                            {hasMultiple && (
+                              <sup
+                                aria-hidden="true"
+                                class="ms-0.5 text-[0.6rem]"
+                              >
+                                {list.length}
+                              </sup>
+                            )}
+                          </a>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ))
+        }
+      </div>
+      <p class="mt-6 text-xs opacity-70">
+        点亮的日期可以点开当天的日记；同一天写了两则以上时，会进入最近的那一则。
+      </p>
+    </section>
+  </Main>
+  <Footer />
+</Layout>

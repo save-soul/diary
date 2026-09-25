@@ -1,0 +1,201 @@
+---
+import { getCollection } from "astro:content";
+import Layout from "@/layouts/Layout.astro";
+import Header from "@/components/Header.astro";
+import Footer from "@/components/Footer.astro";
+import Socials from "@/components/Socials.astro";
+import LinkButton from "@/components/LinkButton.astro";
+import Timeline from "@/components/Timeline.astro";
+import StatsPanel from "@/components/StatsPanel.astro";
+import Hr from "@/components/Hr.astro";
+import getSortedEntries from "@/utils/getSortedEntries";
+import getDiaryStats from "@/utils/getDiaryStats";
+import { getDiaryPath } from "@/utils/getDiaryPath";
+import { getDiaryDate } from "@/utils/date";
+import IconRss from "@/assets/icons/IconRss.svg";
+import IconArrowRight from "@/assets/icons/IconArrowRight.svg";
+import { SITE } from "@/config";
+import { SOCIALS } from "@/constants";
+
+const entries = await getCollection("diary");
+const sortedEntries = getSortedEntries(entries);
+
+const stats = getDiaryStats(sortedEntries);
+
+/**
+ * 「往年今天」与「随便翻一则」共用的轻量清单
+ *
+ * 只带日期、路径、标题三项，交给浏览器端计算 —— 这两个功能都依赖「今天」，
+ * 而静态页面构建完就固定了，写在服务端会随构建时间过期。
+ */
+const manifest = sortedEntries.map(entry => ({
+  d: getDiaryDate(entry.data.pubDatetime, entry.data.timezone).format(
+    "YYYY-MM-DD"
+  ),
+  p: getDiaryPath(entry.id, entry.data),
+  t: entry.data.title,
+}));
+---
+
+<Layout>
+  <Header />
+  <main id="main-content" tabindex="-1" data-layout="index">
+    <section id="hero" class="pt-8 pb-6">
+      <h1 class="my-4 inline-block text-4xl font-bold sm:my-8 sm:text-5xl">
+        {SITE.welcome.title}
+      </h1>
+      <a
+        target="_blank"
+        href="/rss.xml"
+        class="inline-block"
+        aria-label={SITE.welcome.rssLabel}
+        title={SITE.welcome.rssLabel}
+      >
+        <IconRss
+          width={20}
+          height={20}
+          class="scale-125 stroke-accent stroke-3 rtl:-rotate-90"
+        />
+        <span class="sr-only">{SITE.welcome.rssLabel}</span>
+      </a>
+
+      <p class="mt-2">{SITE.welcome.description}</p>
+      {
+        // only display if at least one social link is enabled
+        SOCIALS.length > 0 && (
+          <div class="mt-4 flex flex-col sm:flex-row sm:items-center">
+            <div class="me-2 mb-1 whitespace-nowrap sm:mb-0">社交媒体:</div>
+            <Socials />
+          </div>
+        )
+      }
+    </section>
+
+    <Hr />
+
+    <section id="overview" class="pt-10">
+      <h2 class="mb-4 text-2xl font-semibold tracking-wide">这本日记</h2>
+      <StatsPanel {stats} />
+    </section>
+
+    {/*
+      「往年今天」：默认隐藏，由脚本在找到同月同日的旧记录时展开。
+      这样没有匹配的日子不会留空档，也不会因事后插入内容造成布局跳动。
+    */}
+    <section id="on-this-day" class="hidden pt-12" data-on-this-day>
+      <h2 class="mb-3 text-2xl font-semibold tracking-wide">往年今天</h2>
+      <ul class="space-y-2" data-on-this-day-list></ul>
+    </section>
+
+    <section id="recent-diary" class="pt-14 pb-6">
+      <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2">
+        <h2 class="text-2xl font-semibold tracking-wide">时光轴</h2>
+        <button
+          id="random-entry"
+          type="button"
+          class="rounded border border-border px-3 py-1 text-sm transition-colors hover:border-accent hover:text-accent"
+        >
+          随便翻一则
+        </button>
+      </div>
+      <p class="mt-2 mb-6 text-sm opacity-75">
+        最近的记录，由近及远；点开年份可以收起或展开早年。
+      </p>
+      <Timeline entries={sortedEntries} budget={SITE.diaryPerIndex} />
+    </section>
+
+    <div class="my-8 flex flex-wrap justify-center gap-x-6 gap-y-3">
+      <LinkButton href="/diary/">
+        查看全部日记
+        <IconArrowRight class="inline-block rtl:-rotate-180" />
+      </LinkButton>
+      <LinkButton href="/calendar/">
+        按月历查看
+        <IconArrowRight class="inline-block rtl:-rotate-180" />
+      </LinkButton>
+      <LinkButton href="/archives/">
+        按年表翻检
+        <IconArrowRight class="inline-block rtl:-rotate-180" />
+      </LinkButton>
+    </div>
+  </main>
+  <Footer />
+</Layout>
+
+<script
+  is:inline
+  type="application/json"
+  id="diary-manifest"
+  set:html={JSON.stringify(manifest)}
+/>
+
+<script is:inline data-astro-rerun>
+  (() => {
+    const node = document.getElementById("diary-manifest");
+    if (!node) return;
+
+    let list = [];
+    try {
+      list = JSON.parse(node.textContent || "[]");
+    } catch {
+      return;
+    }
+    if (!Array.isArray(list) || list.length === 0) return;
+
+    /* ---------- 往年今天：同月同日、但不是今年的那一则 ---------- */
+    const section = document.querySelector("[data-on-this-day]");
+    const ul = document.querySelector("[data-on-this-day-list]");
+    if (section && ul) {
+      // 用访客本机日期判断「今天」—— 读者在哪一天打开，就算哪一天
+      const now = new Date();
+      const month = String(now.getMonth() + 1).padStart(2, "0");
+      const day = String(now.getDate()).padStart(2, "0");
+      const mmdd = `${month}-${day}`;
+      const thisYear = String(now.getFullYear());
+
+      const matches = list.filter(
+        item => item.d.slice(5) === mmdd && item.d.slice(0, 4) < thisYear
+      );
+
+      ul.replaceChildren(
+        ...matches.map(item => {
+          const li = document.createElement("li");
+          const a = document.createElement("a");
+          a.href = item.p;
+          a.className =
+            "decoration-dashed underline-offset-4 hover:text-accent hover:underline";
+          a.textContent = `${item.d.slice(0, 4)} 年 ${Number(item.d.slice(5, 7))} 月 ${Number(item.d.slice(8))} 日 · ${item.t}`;
+          li.appendChild(a);
+          return li;
+        })
+      );
+
+      section.classList.toggle("hidden", matches.length === 0);
+    }
+
+    /* ---------- 随便翻一则 ---------- */
+    const button = document.getElementById("random-entry");
+    if (button) {
+      button.addEventListener("click", () => {
+        let pick = list[Math.floor(Math.random() * list.length)];
+        // 极小概率会翻到当前这一页（站内跳转回来时），重掷几次
+        let guard = 0;
+        while (list.length > 1 && pick.p === location.pathname && guard < 8) {
+          pick = list[Math.floor(Math.random() * list.length)];
+          guard++;
+        }
+        location.href = pick.p;
+      });
+    }
+  })();
+</script>
+
+<script>
+  document.addEventListener("astro:page-load", () => {
+    const indexLayout = (document.querySelector("#main-content") as HTMLElement)
+      ?.dataset?.layout;
+    if (indexLayout) {
+      sessionStorage.setItem("backUrl", "/");
+    }
+  });
+</script>

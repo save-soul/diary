@@ -1,0 +1,50 @@
+---
+import {
+  getDiaryDate,
+  formatDate,
+  formatWeekday,
+  formatDateISO,
+} from "@/utils/date";
+
+export interface Props {
+  pubDatetime: string | Date;
+  modDatetime?: string | Date | null;
+  timezone?: string | null;
+  /** sm：列表里的一行日期；lg：日记正文顶部的大号日期块 */
+  size?: "sm" | "lg";
+}
+
+const { pubDatetime, modDatetime, timezone, size = "sm" } = Astro.props;
+
+const date = getDiaryDate(pubDatetime, timezone);
+const isModified = Boolean(modDatetime && new Date(modDatetime) > new Date(pubDatetime));
+const iso = formatDateISO(date);
+---
+
+{
+  size === "lg" ? (
+    <div class="flex items-center gap-4">
+      <div class="flex min-w-20 flex-col items-center rounded border border-border px-3 py-2">
+        <span class="text-3xl leading-none font-bold text-accent">
+          {date.format("DD")}
+        </span>
+        <span class="mt-1 text-xs opacity-70">{date.format("M")} 月</span>
+      </div>
+      <div class="flex flex-col gap-1">
+        <span class="text-lg font-medium">{date.format("YYYY")} 年</span>
+        <span class="text-sm opacity-75">
+          {formatWeekday(date)}
+          <span data-diary-distance data-diary-date={iso} class="hidden" />
+        </span>
+      </div>
+    </div>
+  ) : (
+    <div class="flex flex-wrap items-baseline gap-x-2 text-sm">
+      <time datetime={date.toISOString()} class="font-medium text-accent">
+        {formatDate(date)}
+      </time>
+      <span class="opacity-70">{formatWeekday(date)}</span>
+      {isModified && <span class="text-xs opacity-70">· 更新于 {formatDate(getDiaryDate(modDatetime as string, timezone))}</span>}
+    </div>
+  )
+}

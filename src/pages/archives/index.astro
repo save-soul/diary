@@ -1,0 +1,101 @@
+---
+import { getCollection } from "astro:content";
+import Main from "@/layouts/Main.astro";
+import Layout from "@/layouts/Layout.astro";
+import Header from "@/components/Header.astro";
+import Footer from "@/components/Footer.astro";
+import StatsPanel from "@/components/StatsPanel.astro";
+import getSortedEntries from "@/utils/getSortedEntries";
+import getDiaryTimeline from "@/utils/getDiaryTimeline";
+import getDiaryStats from "@/utils/getDiaryStats";
+import { getDiaryPath } from "@/utils/getDiaryPath";
+import {
+  formatMonth,
+  formatWeekday,
+  getDiaryDate,
+  getMonthAnchor,
+  getYearAnchor,
+} from "@/utils/date";
+import { SITE } from "@/config";
+
+// Redirect to 404 page if `showArchives` config is false
+if (!SITE.showArchives) {
+  return Astro.redirect("/404");
+}
+
+const entries = getSortedEntries(await getCollection("diary"));
+const groups = getDiaryTimeline(entries);
+const stats = getDiaryStats(entries);
+---
+
+<Layout
+  title={`年表 | ${SITE.title}`}
+  description="日记年表，按年份与月份列出全部记录，便于快速定位某一天写下的内容。"
+>
+  <Header />
+  <Main pageTitle="年表" pageDesc="按年月翻检这本日记">
+    <StatsPanel {stats} />
+
+    <p class="mt-4 text-sm">
+      <a
+        href="/calendar/"
+        class="opacity-80 decoration-dashed underline-offset-4 hover:text-accent hover:underline hover:opacity-100"
+      >
+        换成月历看记录分布 →
+      </a>
+    </p>
+
+    <div class="mt-10">
+      {
+        groups.map(({ year, count, months }) => (
+          <section id={getYearAnchor(year)} class="scroll-mt-24">
+            <h2 class="flex items-baseline gap-2 pt-4">
+              <span class="text-2xl font-bold">{year}</span>
+              <sup class="text-sm opacity-70">{count} 则</sup>
+            </h2>
+
+            {months.map(({ month, entries: monthEntries }) => (
+              <div
+                id={getMonthAnchor(year, month)}
+                class="flex flex-col scroll-mt-24 sm:flex-row"
+              >
+                <div class="mt-6 min-w-36 text-lg sm:my-6">
+                  <span class="font-bold">{formatMonth(month)}</span>
+                  <sup class="text-xs opacity-70">{monthEntries.length}</sup>
+                </div>
+                <ul class="grow">
+                  {monthEntries.map(entry => {
+                    const date = getDiaryDate(
+                      entry.data.pubDatetime,
+                      entry.data.timezone
+                    );
+                    return (
+                      <li class="my-4 leading-relaxed">
+                        <time
+                          datetime={date.toISOString()}
+                          class="text-xs tabular-nums opacity-65"
+                        >
+                          {date.format("MM-DD")}
+                        </time>
+                        <span class="ms-2 text-xs opacity-70">
+                          {formatWeekday(date).replace("星期", "周")}
+                        </span>
+                        <a
+                          href={getDiaryPath(entry.id, entry.data)}
+                          class="ms-2 decoration-dashed underline-offset-4 hover:text-accent hover:underline"
+                        >
+                          {entry.data.title}
+                        </a>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))}
+          </section>
+        ))
+      }
+    </div>
+  </Main>
+  <Footer />
+</Layout>

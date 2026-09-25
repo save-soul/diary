@@ -1,0 +1,42 @@
+---
+import IconArrowLeft from "@/assets/icons/IconArrowLeft.svg";
+import IconArrowRight from "@/assets/icons/IconArrowRight.svg";
+import LinkButton from "./LinkButton.astro";
+
+export interface Props {
+  currentPage: number;
+  lastPage: number;
+  /** 上一页（更近的日子）的地址，缺省表示已是第一页 */
+  prevUrl?: string;
+  /** 下一页（更早的日子）的地址，缺省表示已是最后一页 */
+  nextUrl?: string;
+}
+
+const { currentPage, lastPage, prevUrl, nextUrl } = Astro.props;
+---
+
+{
+  lastPage > 1 && (
+    <nav class="mt-auto mb-8 flex justify-center" aria-label="Pagination">
+      <LinkButton
+        disabled={!prevUrl}
+        href={prevUrl}
+        class:list={["me-4 select-none", { "opacity-70": !prevUrl }]}
+        aria-label="Previous"
+      >
+        <IconArrowLeft class="inline-block rtl:rotate-180" />
+        更近的日子
+      </LinkButton>
+      {currentPage} / {lastPage}
+      <LinkButton
+        disabled={!nextUrl}
+        href={nextUrl}
+        class:list={["ms-4 select-none", { "opacity-70": !nextUrl }]}
+        aria-label="Next"
+      >
+        更早的日子
+        <IconArrowRight class="inline-block rtl:rotate-180" />
+      </LinkButton>
+    </nav>
+  )
+}

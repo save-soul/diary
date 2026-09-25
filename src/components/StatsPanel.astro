@@ -1,0 +1,56 @@
+---
+import type { DiaryStats } from "@/utils/getDiaryStats";
+import { formatMonth } from "@/utils/date";
+
+export interface Props {
+  stats: DiaryStats;
+}
+
+const { stats } = Astro.props;
+
+const formatCount = (value: number) => {
+  if (value >= 10000) return `${(value / 10000).toFixed(1)} 万`;
+  return value.toLocaleString("zh-CN");
+};
+
+const items = [
+  { label: "日记", value: `${stats.total}`, unit: "则" },
+  { label: "记录", value: `${stats.days}`, unit: "天" },
+  { label: "主题", value: `${stats.tags}`, unit: "个" },
+  {
+    label: "起笔",
+    value: stats.firstDate
+      ? `${stats.firstDate.format("YYYY")}.${stats.firstDate.format("MM")}`
+      : "—",
+    unit: "",
+  },
+];
+
+const startMonth = stats.firstDate
+  ? `${stats.firstDate.format("YYYY")} 年 ${formatMonth(Number(stats.firstDate.format("M")))}`
+  : "";
+---
+
+<div class="rounded border border-border p-5">
+  <dl class="grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-4">
+    {
+      items.map(({ label, value, unit }) => (
+        <div class="flex flex-col gap-1">
+          <dt class="text-xs tracking-wide opacity-70">{label}</dt>
+          <dd class="text-xl font-bold text-accent sm:text-2xl">
+            {value}
+            {unit && <span class="ms-1 text-sm font-normal opacity-70">{unit}</span>}
+          </dd>
+        </div>
+      ))
+    }
+  </dl>
+  {
+    stats.total > 0 && (
+      <p class="mt-4 border-t border-border pt-3 text-xs leading-relaxed opacity-70">
+        自 {startMonth} 起笔，跨越 {stats.years} 个年头，累计写下约{" "}
+        {formatCount(stats.chars)} 字。
+      </p>
+    )
+  }
+</div>

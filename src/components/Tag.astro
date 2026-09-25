@@ -1,0 +1,44 @@
+---
+export interface Props {
+  tag: string;
+  tagName: string;
+  /** 该标签下的日记则数，仅在标签索引页展示 */
+  count?: number;
+  size?: "sm" | "lg";
+}
+
+const { tag, tagName, count, size = "sm" } = Astro.props;
+---
+
+{/*
+  悬停反馈必须绑在 <a> 自身，而不是外层 <li>：
+  <li> 一旦成为 grid/flex 的子项就会被「块化」，宽度可能撑满整列
+  （标签索引页实测 408px，而链接只有 118px）。那种情况下用 group-hover 变色，
+  鼠标落在链接右侧的空白处也会变色，但光标仍是箭头 —— 用户会觉得「没到链接上就变了」。
+
+  现在把标签名与则数一起放进同一个 <a>，于是三者范围完全重合：
+  变色范围 = 光标变手指的范围 = 可点击范围，并且则数也成了有效点击目标。
+*/}
+<li class:list={["inline-block", size === "sm" ? "my-1" : "mx-1 my-3"]}>
+  <a
+    href={`/tags/${tag}/`}
+    transition:name={tag}
+    class:list={[
+      "relative inline-block hover:-top-0.5 hover:text-accent focus-visible:p-1 focus-visible:*:no-underline",
+      size === "sm" ? "text-sm" : "text-lg",
+    ]}
+  >
+    <span
+      class:list={[
+        "underline decoration-dashed",
+        size === "sm" ? "underline-offset-4" : "underline-offset-8",
+      ]}>#{tagName}</span
+    >{
+      count !== undefined && (
+        <sup class="ms-1.5 text-xs opacity-70" aria-label={`${count} 则`}>
+          {count}
+        </sup>
+      )
+    }
+  </a>
+</li>

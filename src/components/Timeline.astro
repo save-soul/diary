@@ -1,0 +1,55 @@
+---
+import type { DiaryEntry } from "@/types";
+import getDiaryTimeline, { limitTimeline } from "@/utils/getDiaryTimeline";
+import { formatMonth, getMonthAnchor, getYearAnchor } from "@/utils/date";
+import DiaryCard from "./DiaryCard.astro";
+import IconChevronRight from "@/assets/icons/IconChevronRight.svg";
+
+export interface Props {
+  entries: DiaryEntry[];
+  /** 只展开最近的年份，往年收起（便于长期记录后快速翻阅） */
+  collapsePreviousYears?: boolean;
+  /** 首页等摘要场景的条目预算，按「整年」截取，保证年份计数始终真实 */
+  budget?: number;
+}
+
+const { entries, collapsePreviousYears = true, budget } = Astro.props;
+
+const groups = limitTimeline(getDiaryTimeline(entries), budget);
+---
+
+<div class="space-y-10">
+  {
+    groups.map(({ year, count, months }, yearIndex) => (
+      <section id={getYearAnchor(year)} class="scroll-mt-24">
+        <details
+          class="group/year"
+          open={!collapsePreviousYears || yearIndex === 0}
+        >
+          <summary class="flex cursor-pointer list-none items-baseline gap-2 py-1 [&::-webkit-details-marker]:hidden">
+            <h2 class="text-2xl font-bold">{year} 年</h2>
+            <sup class="text-sm opacity-70">{count} 则</sup>
+            <IconChevronRight class="ms-auto size-5 transition-transform group-open/year:rotate-90" />
+          </summary>
+
+          <div class="mt-4 space-y-8">
+            {months.map(({ month, entries: monthEntries }) => (
+              <div id={getMonthAnchor(year, month)} class="scroll-mt-24">
+                {/* 月份是分组标签而非内容结构，不占用标题层级；条目标题统一为 h3 */}
+                <div class="mb-4 text-sm tracking-wide opacity-70">
+                  {formatMonth(month)}
+                  <sup class="ms-1">{monthEntries.length}</sup>
+                </div>
+                <ol class="relative ms-2 border-s border-dashed border-accent/30 ps-6">
+                  {monthEntries.map(entry => (
+                    <DiaryCard {...entry} rail variant="h3" />
+                  ))}
+                </ol>
+              </div>
+            ))}
+          </div>
+        </details>
+      </section>
+    ))
+  }
+</div>

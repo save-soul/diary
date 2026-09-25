@@ -1,0 +1,33 @@
+---
+import { type CollectionEntry, getCollection } from "astro:content";
+import DiaryEntry from "@/layouts/DiaryEntry.astro";
+import getSortedEntries from "@/utils/getSortedEntries";
+import {
+  assertUniqueDiaryPaths,
+  getDiaryRouteParams,
+} from "@/utils/getDiaryPath";
+
+export interface Props {
+  post: CollectionEntry<"diary">;
+}
+
+export async function getStaticPaths() {
+  const entries = await getCollection("diary");
+  const published = getSortedEntries(entries);
+
+  // 链接里不含目录信息，同一天 + 同 slug 会互相覆盖，这里让构建直接失败
+  assertUniqueDiaryPaths(published);
+
+  return published.map(post => ({
+    params: getDiaryRouteParams(post.id, post.data),
+    props: { post },
+  }));
+}
+
+const { post } = Astro.props;
+
+const entries = await getCollection("diary");
+const posts = getSortedEntries(entries);
+---
+
+<DiaryEntry post={post} posts={posts} />

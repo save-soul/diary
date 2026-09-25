@@ -1,0 +1,449 @@
+---
+import { render } from "astro:content";
+import Layout from "@/layouts/Layout.astro";
+import Header from "@/components/Header.astro";
+import Footer from "@/components/Footer.astro";
+import Tag from "@/components/Tag.astro";
+import DiaryDate from "@/components/DiaryDate.astro";
+import EditPost from "@/components/EditPost.astro";
+import ShareLinks from "@/components/ShareLinks.astro";
+import Comments from "@/components/Comments.astro";
+import BackButton from "@/components/BackButton.astro";
+import BackToTopButton from "@/components/BackToTopButton.astro";
+import { getDiaryPath } from "@/utils/getDiaryPath";
+import { slugifyStr } from "@/utils/slugify";
+import {
+  countChars,
+  formatChars,
+  getReadingMinutes,
+} from "@/utils/readingStats";
+import {
+  formatDate,
+  formatMonth,
+  getDiaryDate,
+  getMonthAnchor,
+  getYearAnchor,
+} from "@/utils/date";
+import IconChevronLeft from "@/assets/icons/IconChevronLeft.svg";
+import IconChevronRight from "@/assets/icons/IconChevronRight.svg";
+import type { DiaryEntry } from "@/types";
+import { SITE } from "@/config";
+
+export interface Props {
+  post: DiaryEntry;
+  posts: DiaryEntry[];
+}
+
+const { post, posts } = Astro.props;
+
+const {
+  title,
+  author,
+  description,
+  ogImage: initOgImage,
+  canonicalURL,
+  pubDatetime,
+  modDatetime,
+  timezone,
+  tags,
+  hideEditPost,
+  weather,
+  location,
+  mood,
+} = post.data;
+
+const { Content, headings } = await render(post);
+
+/**
+ * 正文目录
+ *
+ * 只取二级、三级标题。少于 3 节不渲染 —— 短篇一屏就看完了，加了只是噪声。
+ * 标题的 id 由 rehype 管线生成，与这里的 slug 对应。
+ */
+const toc = headings.filter(heading => heading.depth === 2 || heading.depth === 3);
+
+/** 篇幅与阅读时长：口径与概览统计一致 */
+const chars = countChars(post.body ?? "");
+
+let ogImageUrl: string | undefined;
+
+// Determine OG image source
+if (typeof initOgImage === "string") {
+  ogImageUrl = initOgImage; // Remote OG image (absolute URL)
+} else if (initOgImage?.src) {
+  ogImageUrl = initOgImage.src; // Local asset
+}
+
+// Use dynamic OG image if enabled and no remote|local ogImage
+// 注意 getDiaryPath 末尾已带斜杠，这里不能再补一个
+if (!ogImageUrl && SITE.dynamicOgImage) {
+  ogImageUrl = `${getDiaryPath(post.id, post.data)}index.png`;
+}
+
+// Resolve OG image URL (or fallback to SITE.ogImage / default `og.png`)
+const ogImage = ogImageUrl
+  ? new URL(ogImageUrl, Astro.url.origin).href
+  : undefined;
+
+const layoutProps = {
+  title: `${title} | ${SITE.title}`,
+  // 结构化数据要的是「条目自身的标题」，不带「| 站名」后缀
+  headline: title,
+  tags,
+  keywords: tags.join(", "),
+  author,
+  description,
+  pubDatetime,
+  modDatetime,
+  canonicalURL,
+  ogImage,
+  scrollSmooth: true,
+};
+
+const diaryDate = getDiaryDate(pubDatetime, timezone);
+
+/** 当天的附加记录（写了才显示） */
+const dayNotes = [
+  weather && { label: "天气", value: weather },
+  location && { label: "地点", value: location },
+  mood && { label: "心情", value: mood },
+].filter(Boolean) as { label: string; value: string }[];
+
+/* ========== 时间上的相邻两则 ========== */
+
+const allPosts = posts.map(entry => ({
+  id: entry.id,
+  title: entry.data.title,
+  data: entry.data,
+}));
+
+const currentIndex = allPosts.findIndex(item => item.id === post.id);
+
+// 列表按时间倒序：索引 -1 更近，索引 +1 更早
+const newerEntry = currentIndex > 0 ? allPosts[currentIndex - 1] : null;
+const olderEntry =
+  currentIndex >= 0 && currentIndex + 1 < allPosts.length
+    ? allPosts[currentIndex + 1]
+    : null;
+---
+
+<Layout {...layoutProps}>
+  <Header />
+  <BackButton />
+  <main
+    id="main-content"
+    tabindex="-1"
+    class:list={[
+      "mx-auto w-full max-w-app px-4 pb-12",
+      { "mt-8": !SITE.showBackButton },
+    ]}
+    data-pagefind-body
+  >
+    <!-- 日期层级：日记 › 年 › 月 -->
+    <nav aria-label="面包屑" class="mb-6 text-sm opacity-75">
+      <ol class="flex flex-wrap items-center gap-1">
+        <li>
+          <a href="/diary/" class="hover:text-accent">日记</a>
+        </li>
+        <li aria-hidden="true">›</li>
+        <li>
+          <a
+            href={`/archives/#${getYearAnchor(diaryDate.year())}`}
+            class="hover:text-accent"
+          >
+            {diaryDate.format("YYYY")} 年
+          </a>
+        </li>
+        <li aria-hidden="true">›</li>
+        <li>
+          <a
+            href={`/archives/#${getMonthAnchor(diaryDate.year(), diaryDate.month() + 1)}`}
+            class="hover:text-accent"
+          >
+            {formatMonth(diaryDate.month() + 1)}
+          </a>
+        </li>
+      </ol>
+    </nav>
+
+    <div data-diary-entry>
+      <DiaryDate {pubDatetime} {modDatetime} {timezone} size="lg" />
+    </div>
+
+    <h1
+      transition:name={slugifyStr(title)}
+      class="mt-6 inline-block text-2xl font-bold text-accent sm:text-3xl"
+    >
+      {title}
+    </h1>
+
+    <div class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+      {
+        dayNotes.map(({ label, value }) => (
+          <span class="rounded border border-border px-2 py-0.5 text-xs">
+            <span class="opacity-70">{label}</span>
+            <span class="ms-1">{value}</span>
+          </span>
+        ))
+      }
+      {/* 篇幅：外层不要再叠加 opacity，否则 0.8 × 0.7 = 0.56，浅色下低于 AA */}
+      <span class="rounded border border-border px-2 py-0.5 text-xs">
+        <span class="opacity-70">篇幅</span>
+        <span class="ms-1">
+          {formatChars(chars)} · 约 {getReadingMinutes(chars)} 分钟
+        </span>
+      </span>
+      <EditPost {hideEditPost} {post} />
+    </div>
+
+    {
+      /* 正文目录：节数多时默认收起，免得把正文推到屏幕外 */
+      toc.length >= 3 && (
+        <nav
+          aria-label="本文目录"
+          data-pagefind-ignore
+          class="mx-auto mt-8 max-w-app rounded border border-dashed border-border px-4 py-3"
+        >
+          <details class="group/toc" open={toc.length <= 8}>
+            <summary class="flex cursor-pointer list-none items-baseline gap-2 [&::-webkit-details-marker]:hidden">
+              <span class="text-sm font-medium">本文目录</span>
+              <sup class="text-xs opacity-70">{toc.length} 节</sup>
+              <IconChevronRight class="ms-auto size-4 self-center transition-transform group-open/toc:rotate-90" />
+            </summary>
+            <ol class="mt-3 space-y-1.5 text-sm">
+              {toc.map(heading => (
+                <li class:list={["flex gap-2", { "ms-4": heading.depth === 3 }]}>
+                  <span aria-hidden="true" class="select-none opacity-70">
+                    ·
+                  </span>
+                  <a
+                    href={`#${heading.slug}`}
+                    class="opacity-80 decoration-dashed underline-offset-4 hover:text-accent hover:underline hover:opacity-100"
+                  >
+                    {heading.text}
+                  </a>
+                </li>
+              ))}
+            </ol>
+          </details>
+        </nav>
+      )
+    }
+
+    <article
+      id="article"
+      class="app-prose mx-auto mt-8 max-w-app prose-pre:bg-(--shiki-light-bg) dark:prose-pre:bg-(--shiki-dark-bg)"
+    >
+      <Content />
+    </article>
+
+    <hr class="my-8 border-dashed" />
+
+    <ul class="mt-4 mb-8 sm:my-8">
+      {tags.map(tag => <Tag tag={slugifyStr(tag)} tagName={tag} />)}
+    </ul>
+
+    <BackToTopButton />
+
+    <ShareLinks />
+
+    <hr class="my-6 border-dashed" />
+
+    <Comments pageTitle={title} />
+
+    <!-- 沿着时间线往前走／往回看 -->
+    <div data-pagefind-ignore class="grid grid-cols-1 gap-6 sm:grid-cols-2">
+      {
+        olderEntry && (
+          <a
+            href={getDiaryPath(olderEntry.id, olderEntry.data)}
+            class="flex w-full gap-1 hover:opacity-75"
+          >
+            <IconChevronLeft class="inline-block flex-none rtl:rotate-180" />
+            <div>
+              <span>前一则</span>
+              <div class="text-sm text-accent/85">
+                {formatDate(getDiaryDate(olderEntry.data.pubDatetime, olderEntry.data.timezone))}{" "}
+                · {olderEntry.title}
+              </div>
+            </div>
+          </a>
+        )
+      }
+      {
+        newerEntry && (
+          <a
+            href={getDiaryPath(newerEntry.id, newerEntry.data)}
+            class="flex w-full justify-end gap-1 text-end hover:opacity-75 sm:col-start-2"
+          >
+            <div>
+              <span>后一则</span>
+              <div class="text-sm text-accent/85">
+                {formatDate(getDiaryDate(newerEntry.data.pubDatetime, newerEntry.data.timezone))}{" "}
+                · {newerEntry.title}
+              </div>
+            </div>
+            <IconChevronRight class="inline-block flex-none rtl:rotate-180" />
+          </a>
+        )
+      }
+    </div>
+  </main>
+  <Footer />
+</Layout>
+
+<script is:inline data-astro-rerun>
+  /** 把「记录日期」换算成离今天多久：昨天 / 3 天前 / 距今天 267 天 */
+  function updateDiaryDistance() {
+    const today = new Date();
+    const todayUTC = Date.UTC(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate()
+    );
+
+    document.querySelectorAll("[data-diary-distance]").forEach(node => {
+      const iso = node.getAttribute("data-diary-date");
+      if (!iso) return;
+
+      const [year, month, day] = iso.split("-").map(Number);
+      if (!year || !month || !day) return;
+
+      const diff = Math.round(
+        (todayUTC - Date.UTC(year, month - 1, day)) / 86400000
+      );
+
+      let text = "";
+      if (diff === 0) text = "· 就是今天";
+      else if (diff === 1) text = "· 昨天";
+      else if (diff > 1) text = `· 距今天 ${diff} 天`;
+
+      if (!text) return;
+      node.textContent = text;
+      node.classList.remove("hidden");
+    });
+  }
+  updateDiaryDistance();
+  document.addEventListener("astro:page-load", updateDiaryDistance);
+
+  /** Create a progress indicator
+   *  at the top */
+  function createProgressBar() {
+    // Create the main container div
+    const progressContainer = document.createElement("div");
+    progressContainer.className =
+      "progress-container fixed top-0 z-10 h-1 w-full bg-background";
+
+    // Create the progress bar div
+    const progressBar = document.createElement("div");
+    progressBar.className = "progress-bar h-1 w-0 bg-accent";
+    progressBar.id = "myBar";
+
+    // Append the progress bar to the progress container
+    progressContainer.appendChild(progressBar);
+
+    // Append the progress container to the document body or any other desired parent element
+    document.body.appendChild(progressContainer);
+  }
+  createProgressBar();
+
+  /** Update the progress bar
+   *  when user scrolls */
+  function updateScrollProgress() {
+    document.addEventListener("scroll", () => {
+      const winScroll =
+        document.body.scrollTop || document.documentElement.scrollTop;
+      const height =
+        document.documentElement.scrollHeight -
+        document.documentElement.clientHeight;
+      const scrolled = (winScroll / height) * 100;
+      if (document) {
+        const myBar = document.getElementById("myBar");
+        if (myBar) {
+          myBar.style.width = scrolled + "%";
+        }
+      }
+    });
+  }
+  updateScrollProgress();
+
+  /** Attaches links to headings in the document,
+   *  allowing sharing of sections easily */
+  function addHeadingLinks() {
+    const headings = Array.from(
+      document.querySelectorAll("h2, h3, h4, h5, h6")
+    );
+    for (const heading of headings) {
+      // w-fit/max-w-full：让标题盒紧贴文字（# 锚点链接在流内，其宽度也计入），
+      // 于是 group-hover 的触发范围是「标题文字 + 锚点」，而不是整行标题的空白区域。
+      heading.classList.add("group", "w-fit", "max-w-full");
+      const link = document.createElement("a");
+      link.className =
+        "heading-link ms-2 no-underline opacity-75 md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100";
+      link.href = "#" + heading.id;
+
+      const span = document.createElement("span");
+      span.ariaHidden = "true";
+      span.innerText = "#";
+      link.appendChild(span);
+      heading.appendChild(link);
+    }
+  }
+  addHeadingLinks();
+
+  /** Attaches copy buttons to code blocks in the document,
+   * allowing users to copy code easily. */
+  function attachCopyButtons() {
+    const copyButtonLabel = "复制";
+    const codeBlocks = Array.from(document.querySelectorAll("pre"));
+
+    for (const codeBlock of codeBlocks) {
+      const wrapper = document.createElement("div");
+      wrapper.style.position = "relative";
+
+      // Check if --file-name-offset custom property exists
+      const computedStyle = getComputedStyle(codeBlock);
+      const hasFileNameOffset =
+        computedStyle.getPropertyValue("--file-name-offset").trim() !== "";
+
+      // Determine the top positioning class
+      const topClass = hasFileNameOffset
+        ? "top-(--file-name-offset)"
+        : "-top-3";
+
+      const copyButton = document.createElement("button");
+      copyButton.className = `copy-code absolute end-3 ${topClass} rounded bg-muted border border-muted px-2 py-1 text-xs leading-4 text-foreground font-medium`;
+      copyButton.innerHTML = copyButtonLabel;
+      codeBlock.setAttribute("tabindex", "0");
+      codeBlock.appendChild(copyButton);
+
+      // wrap codebock with relative parent element
+      codeBlock?.parentNode?.insertBefore(wrapper, codeBlock);
+      wrapper.appendChild(codeBlock);
+
+      copyButton.addEventListener("click", async () => {
+        await copyCode(codeBlock, copyButton);
+      });
+    }
+
+    async function copyCode(block, button) {
+      const code = block.querySelector("code");
+      const text = code?.innerText;
+
+      await navigator.clipboard.writeText(text ?? "");
+
+      // visual feedback that task is completed
+      button.innerText = "已复制";
+
+      setTimeout(() => {
+        button.innerText = copyButtonLabel;
+      }, 700);
+    }
+  }
+  attachCopyButtons();
+
+  /* Go to page start after page swap */
+  document.addEventListener("astro:after-swap", () =>
+    window.scrollTo({ left: 0, top: 0, behavior: "instant" })
+  );
+</script>

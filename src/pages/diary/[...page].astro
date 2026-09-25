@@ -1,0 +1,64 @@
+---
+import { getCollection } from "astro:content";
+import Main from "@/layouts/Main.astro";
+import Layout from "@/layouts/Layout.astro";
+import Header from "@/components/Header.astro";
+import Footer from "@/components/Footer.astro";
+import Timeline from "@/components/Timeline.astro";
+import Pagination from "@/components/Pagination.astro";
+import getSortedEntries from "@/utils/getSortedEntries";
+import getDiaryTimeline, { paginateTimeline } from "@/utils/getDiaryTimeline";
+import { SITE } from "@/config";
+
+/**
+ * 时光轴分页：**不切开年份**
+ *
+ * 用自建的按年分页替代 Astro 的等长分页，这样每一页上的年份组都是完整的，
+ * 标题里的「N 则」永远等于事实条数，不会出现跨页被截断的年份。
+ */
+export async function getStaticPaths() {
+  const entries = getSortedEntries(await getCollection("diary"));
+  const pages = paginateTimeline(getDiaryTimeline(entries), SITE.diaryPerPage);
+
+  const pageUrl = (page: number) => (page <= 1 ? "/diary/" : `/diary/${page}`);
+  const lastPage = pages.length;
+
+  return pages.map((yearGroups, index) => {
+    const currentPage = index + 1;
+
+    return {
+      params: { page: currentPage === 1 ? undefined : String(currentPage) },
+      props: {
+        entries: yearGroups.flatMap(({ months }) =>
+          months.flatMap(({ entries: monthEntries }) => monthEntries)
+        ),
+        currentPage,
+        lastPage,
+        prevUrl: currentPage > 1 ? pageUrl(currentPage - 1) : undefined,
+        nextUrl: currentPage < lastPage ? pageUrl(currentPage + 1) : undefined,
+      },
+    };
+  });
+}
+
+const { entries, currentPage, lastPage, prevUrl, nextUrl } = Astro.props;
+---
+
+<Layout
+  title={`日记 | ${SITE.title}`}
+  description="按时间先后排列的全部日记，按年份分页，不切开任何一年。"
+>
+  <Header />
+  <Main
+    pageTitle="日记"
+    pageDesc={lastPage > 1
+      ? `按时间先后排列的全部记录（第 ${currentPage} / ${lastPage} 页）`
+      : "按时间先后排列的全部记录"}
+  >
+    <Timeline {entries} collapsePreviousYears={currentPage === 1} />
+  </Main>
+
+  <Pagination {currentPage} {lastPage} {prevUrl} {nextUrl} />
+
+  <Footer noMarginTop={lastPage > 1} />
+</Layout>
