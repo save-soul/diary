@@ -46,16 +46,22 @@ const { entries, currentPage, lastPage, prevUrl, nextUrl } = Astro.props;
 
 <Layout
   title={`日记 | ${SITE.title}`}
-  description="按时间先后排列的全部日记，按年份分页，不切开任何一年。"
+  description="从最近的一天往回翻。按年份成组，不切开任何一年。"
 >
   <Header />
   <Main
     pageTitle="日记"
     pageDesc={lastPage > 1
-      ? `按时间先后排列的全部记录（第 ${currentPage} / ${lastPage} 页）`
-      : "按时间先后排列的全部记录"}
+      ? `从最近的一天往回翻（第 ${currentPage} / ${lastPage} 页）`
+      : "从最近的一天往回翻"}
   >
-    <Timeline {entries} collapsePreviousYears={currentPage === 1} />
+    {
+      entries.length > 0 ? (
+        <Timeline {entries} collapsePreviousYears={currentPage === 1} />
+      ) : (
+        <p class="text-sm opacity-75">还没有开始写。</p>
+      )
+    }
   </Main>
 
   <Pagination {currentPage} {lastPage} {prevUrl} {nextUrl} />

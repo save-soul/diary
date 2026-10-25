@@ -1,0 +1,223 @@
+---
+import { Image } from "astro:assets";
+import Layout from "@/layouts/Layout.astro";
+import Header from "@/components/Header.astro";
+import Footer from "@/components/Footer.astro";
+import Main from "@/layouts/Main.astro";
+import getGalleryPhotos, {
+  groupGalleryByYear,
+} from "@/utils/getGalleryPhotos";
+import { formatDate } from "@/utils/date";
+import { SITE } from "@/config";
+
+/*
+  放照片的两种方式（README 的「相册：照片怎么放」有完整说明）：
+  ① 与日记同放 —— 图片放进该则日记所在目录，正文里写 ![说明](./图.jpg)；
+  ② 单独上传 —— 放进 src/data/photos/，一图配一个 .md，
+     frontmatter 写 title / photographedAt / image（可再写 caption、location）。
+  页面上不放操作说明：没有照片时只写一句「还没有照片。」
+*/
+
+const photos = await getGalleryPhotos();
+const years = groupGalleryByYear(photos);
+
+/** 灯箱按索引取图，这里先把「照片 → 序号」固化下来 */
+const indexOf = new Map(photos.map((photo, index) => [photo.key, index]));
+
+/**
+ * 灯箱数据：用原图地址（`image.src` 指向未经缩放的原文件），
+ * 网格里显示的是按宽度裁切的响应式版本。
+ */
+const lightboxData = photos.map(photo => ({
+  src: photo.image.src,
+  alt: photo.alt,
+  caption: photo.caption ?? "",
+  date: formatDate(photo.date),
+  location: photo.location ?? "",
+  entry: photo.entry ?? null,
+}));
+---
+
+<Layout
+  title={`相册 | ${SITE.title}`}
+  description="那些被拍下来的日子，按时间排成一条可以翻看的流。"
+>
+  <Header />
+  <Main pageTitle="相册" pageDesc="有些日子，照片比文字记得清楚">
+    {
+      photos.length === 0 ? (
+        <p class="text-sm opacity-75">还没有照片。</p>
+      ) : (
+        <>
+          {/* 不放「共 N 张，最早的一张在 X 年」这类总述：与每个年份的「N 张」重复，
+              而且一行数据单独占着版面、上下都要留白，读起来突兀。 */}
+          {years.map(({ year, photos: yearPhotos }, index) => (
+            <section class={index === 0 ? "mt-4" : "mt-12"}>
+              <h2 class="flex items-baseline gap-2">
+                <span class="text-2xl font-bold">{year}</span>
+                <sup class="text-sm opacity-70">{yearPhotos.length} 张</sup>
+              </h2>
+
+              {/* 用多栏而不是等宽网格：照片一律**按原始比例**显示，不做裁切，
+                  多栏会让高度自然错落，竖构图与横构图都不吃亏。 */}
+              <ul class="mt-5 columns-1 gap-4 sm:columns-2 lg:columns-3">
+                {yearPhotos.map(photo => (
+                  <li class="mb-4 break-inside-avoid">
+                    <button
+                      type="button"
+                      data-photo={indexOf.get(photo.key)}
+                      class="group block w-full overflow-hidden rounded border border-border transition-colors hover:border-accent"
+                    >
+                      <Image
+                        src={photo.image}
+                        alt={photo.alt}
+                        widths={[320, 480, 640, 960]}
+                        sizes="(min-width: 1024px) 30vw, (min-width: 640px) 50vw, 100vw"
+                        loading={indexOf.get(photo.key)! < 4 ? "eager" : "lazy"}
+                        decoding="async"
+                        class="block h-auto w-full"
+                      />
+                      <span class="flex flex-col gap-1 px-2.5 py-2 text-left text-xs leading-relaxed">
+                        <time
+                          datetime={photo.date.format("YYYY-MM-DD")}
+                          class="tabular-nums opacity-70"
+                        >
+                          {photo.date.format("M 月 D 日")}
+                        </time>
+                        {photo.caption && (
+                          <span class="line-clamp-3">{photo.caption}</span>
+                        )}
+                        {photo.entry && (
+                          <span class="truncate opacity-70">
+                            来自「{photo.entry.title}」
+                          </span>
+                        )}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
+        </>
+      )
+    }
+  </Main>
+  <Footer />
+</Layout>
+
+{
+  photos.length > 0 && (
+    <>
+      <dialog
+        id="photo-lightbox"
+        aria-label="照片大图"
+        class="relative m-auto max-h-[92vh] w-fit max-w-[94vw] rounded border border-border bg-background p-0 text-foreground"
+      >
+        <figure class="flex max-h-[92vh] flex-col">
+          <img
+            id="lightbox-image"
+            src=""
+            alt=""
+            class="max-h-[76vh] w-auto max-w-[94vw] object-contain"
+          />
+          <figcaption class="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-t border-border px-4 py-3 text-sm">
+            <span id="lightbox-date" class="tabular-nums opacity-70" />
+            <span id="lightbox-caption" />
+            <span id="lightbox-location" class="opacity-70" />
+            <a
+              id="lightbox-entry"
+              href="#"
+              class="ms-auto decoration-dashed underline-offset-4 hover:text-accent hover:underline"
+            />
+          </figcaption>
+        </figure>
+        <button
+          id="lightbox-close"
+          type="button"
+          aria-label="关闭"
+          class="absolute end-2 top-2 rounded border border-border bg-background/85 px-2 py-0.5 text-sm leading-6 hover:text-accent"
+        >
+          ✕
+        </button>
+      </dialog>
+
+      <script
+        is:inline
+        type="application/json"
+        id="photo-data"
+        set:html={JSON.stringify(lightboxData)}
+      />
+
+      <script is:inline data-astro-rerun>
+        (() => {
+          const dialog = document.getElementById("photo-lightbox");
+          const dataNode = document.getElementById("photo-data");
+          if (!dialog || !dataNode) return;
+
+          let list = [];
+          try {
+            list = JSON.parse(dataNode.textContent || "[]");
+          } catch {
+            return;
+          }
+
+          const img = dialog.querySelector("#lightbox-image");
+          const dateEl = dialog.querySelector("#lightbox-date");
+          const captionEl = dialog.querySelector("#lightbox-caption");
+          const locationEl = dialog.querySelector("#lightbox-location");
+          const entryEl = dialog.querySelector("#lightbox-entry");
+
+          const open = index => {
+            const photo = list[index];
+            if (!photo) return;
+
+            img.src = photo.src;
+            img.alt = photo.alt;
+            dateEl.textContent = photo.date;
+            captionEl.textContent = photo.caption;
+            // 只输出地点本身：图注各字段之间已有 gap 间隔，再加「·」会与
+            // 地点写法里的「·」（如「上海 · 临港」）连成一片多余的点。
+            locationEl.textContent = photo.location ?? "";
+
+            if (photo.entry) {
+              entryEl.href = photo.entry.href;
+              entryEl.textContent = `来自：${photo.entry.title}`;
+              entryEl.hidden = false;
+            } else {
+              entryEl.hidden = true;
+              entryEl.removeAttribute("href");
+            }
+
+            dialog.showModal();
+          };
+
+          document.querySelectorAll("[data-photo]").forEach(button => {
+            button.addEventListener("click", () =>
+              open(Number(button.dataset.photo))
+            );
+          });
+
+          // 点空白处关闭（点图片与图注时事件的 target 不是 dialog 本身，不会误关）
+          dialog.addEventListener("click", event => {
+            if (event.target === dialog) dialog.close();
+          });
+
+          dialog
+            .querySelector("#lightbox-close")
+            .addEventListener("click", () => dialog.close());
+        })();
+      </script>
+    </>
+  )
+}
+
+<style is:global>
+  #photo-lightbox::backdrop {
+    background: rgb(0 0 0 / 0.72);
+  }
+  /* 打开时锁住页面滚动，避免背景跟着滑动 */
+  html:has(#photo-lightbox[open]) {
+    overflow: hidden;
+  }
+</style>

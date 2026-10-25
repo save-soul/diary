@@ -39,7 +39,14 @@ const manifest = sortedEntries.map(entry => ({
 
 <Layout>
   <Header />
-  <main id="main-content" tabindex="-1" data-layout="index">
+  {/* 注意：这里的 <main> 必须自己承担容器职责（与 Main.astro 一致）。
+      下面的 <section> 只是分组，不再自带宽度与内边距。 */}
+  <main
+    id="main-content"
+    tabindex="-1"
+    data-layout="index"
+    class="mx-auto w-full max-w-app px-4"
+  >
     <section id="hero" class="pt-8 pb-6">
       <h1 class="my-4 inline-block text-4xl font-bold sm:my-8 sm:text-5xl">
         {SITE.welcome.title}
@@ -71,7 +78,8 @@ const manifest = sortedEntries.map(entry => ({
       }
     </section>
 
-    <Hr />
+    {/* 已经在内层容器里了，不要叠加一层 px-4 */}
+    <Hr noPadding />
 
     <section id="overview" class="pt-10">
       <h2 class="mb-4 text-2xl font-semibold tracking-wide">这本日记</h2>
@@ -90,18 +98,31 @@ const manifest = sortedEntries.map(entry => ({
     <section id="recent-diary" class="pt-14 pb-6">
       <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2">
         <h2 class="text-2xl font-semibold tracking-wide">时光轴</h2>
-        <button
-          id="random-entry"
-          type="button"
-          class="rounded border border-border px-3 py-1 text-sm transition-colors hover:border-accent hover:text-accent"
-        >
-          随便翻一则
-        </button>
+        {
+          /* 一则都没有时不渲染按钮：它靠条目清单随机跳转，空清单点了没反应 */
+          sortedEntries.length > 0 && (
+            <button
+              id="random-entry"
+              type="button"
+              class="rounded border border-border px-3 py-1 text-sm transition-colors hover:border-accent hover:text-accent"
+            >
+              随便翻一则
+            </button>
+          )
+        }
       </div>
-      <p class="mt-2 mb-6 text-sm opacity-75">
-        最近的记录，由近及远；点开年份可以收起或展开早年。
-      </p>
-      <Timeline entries={sortedEntries} budget={SITE.diaryPerIndex} />
+      {
+        sortedEntries.length > 0 ? (
+          <>
+            <p class="mt-2 mb-6 text-sm opacity-75">
+              最近的这些日子。更早的收在年份里。
+            </p>
+            <Timeline entries={sortedEntries} budget={SITE.diaryPerIndex} />
+          </>
+        ) : (
+          <p class="mt-2 text-sm opacity-75">还没有开始写。</p>
+        )
+      }
     </section>
 
     <div class="my-8 flex flex-wrap justify-center gap-x-6 gap-y-3">

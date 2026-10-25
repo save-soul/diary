@@ -30,10 +30,10 @@ const stats = getDiaryStats(entries);
 
 <Layout
   title={`年表 | ${SITE.title}`}
-  description="日记年表，按年份与月份列出全部记录，便于快速定位某一天写下的内容。"
+  description="想找某一年、某个月写下的东西，从这里进去。"
 >
   <Header />
-  <Main pageTitle="年表" pageDesc="按年月翻检这本日记">
+  <Main pageTitle="年表" pageDesc="想找哪一年，从这里进去">
     <StatsPanel {stats} />
 
     <p class="mt-4 text-sm">

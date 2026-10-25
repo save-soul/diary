@@ -43,4 +43,37 @@ const diary = defineCollection({
     }),
 });
 
-export const collections = { diary };
+/**
+ * 单独上传到相册的照片目录
+ *
+ * 一张照片 = 一个 `.md` + 与它放在同一目录的图片文件；
+ * 相册页会把这里的照片与「日记正文里引用过的图片」合并成一份时间线。
+ */
+export const PHOTOS_PATH = "src/data/photos";
+
+/**
+ * 相册集合（单独上传的照片）
+ *
+ * 与日记分开成两个集合，是因为它们的必填项不同：照片只需要「什么时候拍的 + 图」，
+ * 不必写标题、摘要、正文。列表顺序按 `photographedAt` 由近及远。
+ */
+const photos = defineCollection({
+  loader: glob({ pattern: "**/[^_]*.md", base: `./${PHOTOS_PATH}` }),
+  schema: ({ image }) =>
+    z.object({
+      title: z.string(),
+      /** 拍摄时间：决定它在相册时间线上的位置 */
+      photographedAt: z.date(),
+      /** 图片文件，用相对路径引用（与 .md 放在同一目录即可） */
+      image: image(),
+      /** 照片说明；同时用作图片的 alt（建议写，读屏靠它） */
+      caption: z.string().optional(),
+      location: z.string().optional(),
+      tags: z.array(z.string()).default([]),
+      draft: z.boolean().optional(),
+      hideEditPost: z.boolean().optional(),
+      timezone: z.string().optional(),
+    }),
+});
+
+export const collections = { diary, photos };

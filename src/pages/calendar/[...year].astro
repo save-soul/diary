@@ -29,13 +29,24 @@ export async function getStaticPaths() {
     ),
   ].sort((a, b) => b - a);
 
+  // 还没有任何记录时也要生成一页，否则导航里的「日历」会直接 404。
+  // 这时先显示今年（空）的月历，写下第一则后自然换成正常年份列表。
+  if (years.length === 0) {
+    const currentYear = Number(getTodayISO().slice(0, 4));
+    return [
+      {
+        params: { year: undefined },
+        props: { year: currentYear, years: [], latestYear: currentYear },
+      },
+    ];
+  }
+
   return years.map((year, index) => ({
     // 最新一年用 /calendar/，更早的年份用 /calendar/2025/
     params: { year: index === 0 ? undefined : String(year) },
     props: { year, years, latestYear: years[0] ?? year },
   }));
 }
-
 interface Props {
   year: number;
   years: number[];
@@ -91,10 +102,10 @@ const summary = [
 
 <Layout
   title={`日历 ${year} | ${SITE.title}`}
-  description={`${year} 年的记录日历：哪些日子写下过东西、一年里的记录密度，以及逐月的记录分布。`}
+  description={`${year} 年：写过的日子都亮着。`}
 >
   <Header />
-  <Main pageTitle="日历" pageDesc="哪些日子写下了东西，一眼可见">
+  <Main pageTitle="日历" pageDesc="写过的日子都亮着">
     <nav aria-label="切换年份" class="flex flex-wrap items-center gap-2 text-sm">
       {
         years.map(item => (

@@ -15,17 +15,21 @@ const tags = getUniqueTags(entries);
 
 <Layout
   title={`标签 | ${SITE.title}`}
-  description="日记标签索引，按出现频率排列，用于快速找到具有相同经历或主题的记录。"
+  description="顺着一个词，翻到同一类日子。出现得多的排在前面。"
 >
   <Header />
-  <Main pageTitle="标签" pageDesc="同一主题下的日记，按出现次数排列">
-    <ul class="grid grid-cols-1 gap-x-8 sm:grid-cols-2">
-      {
-        tags.map(({ tag, tagName, count }) => (
-          <Tag {tag} {tagName} {count} size="lg" />
-        ))
-      }
-    </ul>
+  <Main pageTitle="标签" pageDesc="顺着一个词，翻到同一类日子">
+    {
+      tags.length > 0 ? (
+        <ul class="grid grid-cols-1 gap-x-8 sm:grid-cols-2">
+          {tags.map(({ tag, tagName, count }) => (
+            <Tag {tag} {tagName} {count} size="lg" />
+          ))}
+        </ul>
+      ) : (
+        <p class="text-sm opacity-75">还没有开始写。</p>
+      )
+    }
   </Main>
   <Footer />
 </Layout>

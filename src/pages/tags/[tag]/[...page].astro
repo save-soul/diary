@@ -36,7 +36,7 @@ const { page, tagName } = Astro.props;
   <Main
     pageTitle={[`标签:`, `${tagName}`]}
     titleTransition={tag}
-    pageDesc={`所有关于「${tagName}」的日记`}
+    pageDesc={`关于「${tagName}」的那些日子`}
   >
     <ul>
       {page.data.map(entry => <DiaryCard {...entry} />)}

@@ -36,6 +36,9 @@ html[data-theme="dark"] {
   }
   html {
     @apply overflow-y-scroll scroll-smooth;
+    /* 灯箱打开时会把 overflow 改成 hidden；预留滚动条槽位，
+       否则滚动条一消失，整页内容就会横向位移（实测 7.5px） */
+    scrollbar-gutter: stable;
   }
   body {
     @apply flex min-h-svh flex-col bg-background font-mono text-foreground selection:bg-accent/75 selection:text-background;
@@ -48,8 +51,11 @@ html[data-theme="dark"] {
   [role="button"]:not(:disabled) {
     cursor: pointer;
   }
-  section,
-  footer {
+  /* 只给「页面级」的 section / footer 加容器（它们直接挂在 body 上、自己没有宽度约束）。
+     内层 section 不要加：它们已经在 Main 的 `mx-auto max-w-app px-4` 里，
+     再加一层 px-4 会让内容比页面标题多缩进 16px（相册、日历、首页、时光轴、年表都中过）。 */
+  body > section,
+  body > footer {
     @apply mx-auto max-w-app px-4;
   }
 

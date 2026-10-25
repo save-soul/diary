@@ -11,11 +11,11 @@ const backUrl = SITE.showBackButton ? `${Astro.url.pathname}` : "/";
 
 <Layout
   title={`搜索 | ${SITE.title}`}
-  description="全文搜索这本日记，按关键词找回过去写下的某一天。"
+  description="找一句话、一个词，或者某一天。"
   noindex
 >
   <Header />
-  <Main pageTitle="搜索" pageDesc="在全部日记中查找…">
+  <Main pageTitle="搜索" pageDesc="找一句话，或者一个词">
     <div id="pagefind-search" transition:persist data-backurl={backUrl}></div>
   </Main>
   <Footer />

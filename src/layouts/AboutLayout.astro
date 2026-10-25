@@ -17,7 +17,12 @@ const { frontmatter } = Astro.props;
 <Layout title={`${frontmatter.title} | ${SITE.title}`} description={frontmatter.description}>
   <Header />
   <main id="main-content" class="pt-8">
-    <section id="about" class="app-prose mb-28 max-w-app prose-img:border-0">
+    {/* 这里的 <main> 没有宽度约束，容器样式要显式写出来
+        （基础样式只作用于 body 的直接子元素） */}
+    <section
+      id="about"
+      class="app-prose mx-auto mb-28 max-w-app px-4 prose-img:border-0"
+    >
       <h1 class="text-2xl tracking-wider sm:text-3xl">{frontmatter.title}</h1>
       <slot />
     </section>

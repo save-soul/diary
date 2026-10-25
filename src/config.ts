@@ -1,13 +1,13 @@
 export const SITE = {
-  website: "https://likeit.dev/", // replace this with your deployed domain
+  website: "https://diary.likeit.dev/", // replace this with your deployed domain
   author: "赵文光",
   createdYear: 2025, // 日记起始年份
   profile: "https://zwg.me/",
   title: "蓝色的海角",
   subtitle: "个人日记",
-  desc: "在互联网上留下自己人生轨迹的个人日记本。按日期逐日记录生活、阅读与思考，用时间线串起散落的日常，也供偶然路过的人翻阅。",
+  desc: "一本公开的个人日记。按日期逐日记录生活、阅读与思考，用时间线串起散落的日常，也供偶然路过的人翻阅。",
   keywords:
-    "个人日记, 日记本, 生活记录, 时间线, 人生轨迹, 日常随笔, 学习记录, 阅读笔记, 长期记录",
+    "个人日记, 日记本, 生活记录, 时间线, 日常随笔, 学习记录, 阅读笔记, 长期记录",
   // 默认分享图：由 src/pages/og.png.ts 在构建期用 satori 生成（1200×630，含 logo）
   // 条目页另有按日期生成的 /diary/YYYY/MM/DD/<slug>/index.png
   ogImage: "og.png",
