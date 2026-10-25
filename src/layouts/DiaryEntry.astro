@@ -202,7 +202,7 @@ const olderEntry =
         <nav
           aria-label="本文目录"
           data-pagefind-ignore
-          class="mx-auto mt-8 max-w-app rounded border border-dashed border-border px-4 py-3"
+          class="toc-inline mx-auto mt-8 max-w-app rounded border border-dashed border-border px-4 py-3"
         >
           <details class="group/toc" open={toc.length <= 8}>
             <summary class="flex cursor-pointer list-none items-baseline gap-2 [&::-webkit-details-marker]:hidden">
@@ -230,6 +230,40 @@ const olderEntry =
       )
     }
 
+    {
+      /* 宽屏悬浮目录：仅在视口足够宽（见 .toc-floating 的媒体查询）时显示，
+         落在正文左则留白里、fixed 定位，不挤压也不遮挡正文。窄屏不显示（用上方内联目录）。 */
+      toc.length >= 3 && (
+        <aside
+          aria-label="本文目录"
+          data-pagefind-ignore
+          data-floating-toc
+          class="toc-floating rounded border border-dashed border-border px-4 py-3 text-sm"
+        >
+          <p class="mb-2 flex items-baseline gap-2 font-medium">
+            <span>本文目录</span>
+            <sup class="text-xs opacity-70">{toc.length} 节</sup>
+          </p>
+          <ol class="space-y-1">
+            {toc.map(heading => (
+              <li class:list={[{ "ms-4": heading.depth === 3 }]}>
+                {/* 标记放在 <a> 内部：hover / 点击 / 高亮的范围完全重合，
+                    不会出现「鼠标还在文字外就变色」。默认 visibility:hidden 占位，
+                    所以每一行的文字起点都对齐，切到当前节时也不会跳动。 */}
+                <a
+                  href={`#${heading.slug}`}
+                  class="toc-link flex gap-1.5 rounded px-1 py-0.5 opacity-80 underline-offset-4 hover:bg-muted/40 hover:text-accent hover:opacity-100 hover:underline"
+                >
+                  <IconChevronRight class="toc-marker size-3 flex-none self-center" />
+                  <span>{heading.text}</span>
+                </a>
+              </li>
+            ))}
+          </ol>
+        </aside>
+      )
+    }
+
     <article
       id="article"
       class="app-prose mx-auto mt-8 max-w-app prose-pre:bg-(--shiki-light-bg) dark:prose-pre:bg-(--shiki-dark-bg)"
@@ -239,7 +273,9 @@ const olderEntry =
 
     <hr class="my-8 border-dashed" />
 
-    <ul class="mt-4 mb-8 sm:my-8">
+    {/* 标签之间要留横向间距：<Tag> 的 <li> 只有 inline-block + 纵向 margin，
+        直接并排会贴成「#建站#评论系统」一坨。gap-x-3 与 DiaryCard 里的标签行一致。 */}
+    <ul class="mt-4 mb-8 flex flex-wrap gap-x-3 sm:my-8">
       {tags.map(tag => <Tag tag={slugifyStr(tag)} tagName={tag} />)}
     </ul>
 
@@ -291,6 +327,42 @@ const olderEntry =
   </main>
   <Footer />
 </Layout>
+
+<style>
+  /* 宽屏悬浮目录：默认隐藏。仅在视口足够宽（≥1824px）时才显示 ——
+     此时 max-w-app 已是 1280px（2xl），两侧留白足以容纳侧栏而不挤压/遮挡正文。
+     用 calc 把侧栏锚定在正文右边缘外侧 1.5rem 处；640px = 1280/2（2xl 正文半宽）。 */
+  .toc-floating {
+    display: none;
+  }
+  @media (min-width: 1824px) {
+    .toc-floating {
+      display: block;
+      position: fixed;
+      top: 6rem;
+      width: 14rem;
+      left: calc(50% + 640px + 1.5rem);
+      max-height: calc(100vh - 8rem);
+      overflow-y: auto;
+    }
+    /* 宽屏用悬浮目录，内联（会推低正文）的就不显示了 */
+    .toc-inline {
+      display: none;
+    }
+  }
+  /* 当前阅读到的节：箭头 + accent 文字。
+     箭头用隐藏占位而非条件渲染，避免高亮切换时整行文字左右抖一下。 */
+  .toc-marker {
+    visibility: hidden;
+  }
+  .toc-floating a.toc-active {
+    color: var(--accent);
+    opacity: 1;
+  }
+  .toc-floating a.toc-active .toc-marker {
+    visibility: visible;
+  }
+</style>
 
 <script is:inline data-astro-rerun>
   /** 把「记录日期」换算成离今天多久：昨天 / 3 天前 / 距今天 267 天 */
@@ -446,4 +518,72 @@ const olderEntry =
   document.addEventListener("astro:after-swap", () =>
     window.scrollTo({ left: 0, top: 0, behavior: "instant" })
   );
+
+  /** 宽屏悬浮目录：高亮当前阅读到的节（scroll-spy）。
+   *  侧栏在窄屏是 display:none，没有链接也无妨。
+   *
+   *  不能用 IntersectionObserver 的「最后一个进入回调的胜出」逻辑：
+   *  当几个标题挨得很近时，跳转后它们会同时落在活动带里，回调顺序不保证是
+   *  DOM 顺序，于是会高亮错项（常常是最后一个）。这里改成「按位置确定性地选
+   *  —— 取顶部已越过活动线的最后一个标题」，并给点击加一个兜底，跳转瞬间就高亮对的那项。 */
+  let tocSpyHandler = null;
+  function initFloatingTocSpy() {
+    if (tocSpyHandler) {
+      window.removeEventListener("scroll", tocSpyHandler);
+      tocSpyHandler = null;
+    }
+    const toc = document.querySelector("[data-floating-toc]");
+    if (!toc) return;
+    const links = Array.from(toc.querySelectorAll('a[href^="#"]'));
+    const pairs = [];
+    for (const link of links) {
+      const id = decodeURIComponent(link.getAttribute("href").slice(1));
+      const el = document.getElementById(id);
+      if (el) pairs.push({ el, link });
+    }
+    if (!pairs.length) return;
+
+    // 活动线：视口顶部往下一点（含 heading 的 scroll-margin-block:1rem ≈ 16px）。
+    const ACTIVE_LINE = 24;
+
+    let ticking = false;
+    function computeActive() {
+      ticking = false;
+      // 滚到页面底部时，最后一节可能永远越不过活动线，强制选中最后一个。
+      const atBottom =
+        window.innerHeight + window.scrollY >=
+        document.documentElement.scrollHeight - 2;
+      let current = null;
+      for (const { el } of pairs) {
+        if (el.getBoundingClientRect().top <= ACTIVE_LINE) current = el;
+        else break;
+      }
+      if (atBottom) current = pairs[pairs.length - 1].el;
+      for (const { link } of pairs) link.classList.remove("toc-active");
+      const hit = pairs.find((p) => p.el === current);
+      if (hit) hit.link.classList.add("toc-active");
+    }
+
+    function onScroll() {
+      if (!ticking) {
+        ticking = true;
+        requestAnimationFrame(computeActive);
+      }
+    }
+    tocSpyHandler = onScroll;
+    window.addEventListener("scroll", onScroll, { passive: true });
+
+    // 点击目录直接高亮对应项：跳转瞬间就定位对，不被滚动过程干扰。
+    for (const { link } of pairs) {
+      link.addEventListener("click", () => {
+        for (const l of links) l.classList.remove("toc-active");
+        link.classList.add("toc-active");
+      });
+    }
+
+    // 初始 & view transitions 之后立即算一次
+    computeActive();
+  }
+  initFloatingTocSpy();
+  document.addEventListener("astro:page-load", initFloatingTocSpy);
 </script>

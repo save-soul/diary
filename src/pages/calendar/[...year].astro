@@ -172,9 +172,11 @@ const summary = [
     <section class="mt-12">
       <h3 class="mb-5 text-sm tracking-wide opacity-70">按月查看</h3>
       <div class="grid grid-cols-1 gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
+        {/* table-fixed：7 列一律等宽。auto 布局会按内容比例分配剩余宽度，
+            某个格子多一个上标（如「24²」）就能把那列撑成其它列的几倍宽。 */}
         {
           monthCounts.map(({ month, count }) => (
-            <table class="w-full border-collapse text-center text-xs">
+            <table class="w-full table-fixed border-collapse text-center text-xs">
               <caption class="mb-2 text-left text-base font-bold">
                 {formatMonth(month)}
                 {count > 0 && (
@@ -200,24 +202,31 @@ const summary = [
                 {getMonthGrid(year, month).map(week => (
                   <tr>
                     {week.map(cell => {
-                      if (!cell) return <td />;
+                      if (!cell) return <td class="p-0.5" />;
 
                       const dayOfMonth = Number(cell.slice(8));
                       const list = byDay.get(cell) ?? [];
                       const isToday = cell === today;
 
                       if (list.length === 0) {
+                        /*
+                          空白的日子也用和「有记录」的格子一样的内缩盒子（p-0.5 + block py-1），
+                          这样「今天」的虚线框与旁边日期色块的尺寸完全一致。
+                          今天标记用 outline（不占布局），否则 1px 边框会让它比色块高 2px。
+                        */
                         return (
-                          <td
-                            class:list={[
-                              "py-1 opacity-70",
-                              {
-                                "rounded border border-dashed border-accent":
-                                  isToday,
-                              },
-                            ]}
-                          >
-                            {dayOfMonth}
+                          <td class="p-0.5">
+                            <span
+                              class:list={[
+                                "block rounded py-1 opacity-70",
+                                {
+                                  "outline outline-1 outline-dashed outline-accent":
+                                    isToday,
+                                },
+                              ]}
+                            >
+                              {dayOfMonth}
+                            </span>
                           </td>
                         );
                       }
