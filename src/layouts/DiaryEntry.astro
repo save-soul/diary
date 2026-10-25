@@ -238,24 +238,28 @@ const olderEntry =
           aria-label="本文目录"
           data-pagefind-ignore
           data-floating-toc
-          class="toc-floating rounded border border-dashed border-border px-4 py-3 text-sm"
+          class="toc-floating"
         >
-          <p class="mb-2 flex items-baseline gap-2 font-medium">
+          <p class="toc-head">
             <span>本文目录</span>
-            <sup class="text-xs opacity-70">{toc.length} 节</sup>
+            <span class="toc-count">{toc.length} 节</span>
           </p>
-          <ol class="space-y-1">
+          <ol class="toc-list">
             {toc.map(heading => (
-              <li class:list={[{ "ms-4": heading.depth === 3 }]}>
+              <li class:list={["toc-item", { "toc-h2": heading.depth === 2 }]}>
                 {/* 标记放在 <a> 内部：hover / 点击 / 高亮的范围完全重合，
                     不会出现「鼠标还在文字外就变色」。默认 visibility:hidden 占位，
                     所以每一行的文字起点都对齐，切到当前节时也不会跳动。 */}
                 <a
                   href={`#${heading.slug}`}
-                  class="toc-link flex gap-1.5 rounded px-1 py-0.5 opacity-80 underline-offset-4 hover:bg-muted/40 hover:text-accent hover:opacity-100 hover:underline"
+                  class:list={["toc-link", { "toc-sub": heading.depth === 3 }]}
+                  title={heading.text}
                 >
-                  <IconChevronRight class="toc-marker size-3 flex-none self-center" />
-                  <span>{heading.text}</span>
+                  <IconChevronRight
+                    class="toc-marker size-3 flex-none"
+                    aria-hidden="true"
+                  />
+                  <span class="toc-text">{heading.text}</span>
                 </a>
               </li>
             ))}
@@ -330,8 +334,10 @@ const olderEntry =
 
 <style>
   /* 宽屏悬浮目录：默认隐藏。仅在视口足够宽（≥1824px）时才显示 ——
-     此时 max-w-app 已是 1280px（2xl），两侧留白足以容纳侧栏而不挤压/遮挡正文。
-     用 calc 把侧栏锚定在正文右边缘外侧 1.5rem 处；640px = 1280/2（2xl 正文半宽）。 */
+     此时 max-w-app 已是 1280px（2xl），右侧留白足以容纳侧栏而不挤压/遮挡正文。
+     形态取舍：侧栏落在留白里，不画虚线框/底色 —— 一条干净的竖排清单比「盒子」安静；
+     正文 13.5/12.5px、每条最多两行（line-clamp），字号够读、长标题也不至于折三行；
+     隐藏系统滚动条（留白里一条粗滚动条很突兀），靠「当前节自动滚进视野」提示还有内容。 */
   .toc-floating {
     display: none;
   }
@@ -340,20 +346,89 @@ const olderEntry =
       display: block;
       position: fixed;
       top: 6rem;
-      width: 14rem;
+      /* 左边界锚在正文右缘外侧 1.5rem；宽度跟着剩余留白自适应，最多 18rem，
+         所以从阈值到 4K 都不会压正文、也不会溢出视口右缘。 */
       left: calc(50% + 640px + 1.5rem);
+      width: min(18rem, calc(50% - 680px));
       max-height: calc(100vh - 8rem);
       overflow-y: auto;
+      overscroll-behavior: contain;
+      scrollbar-width: none;
+    }
+    .toc-floating::-webkit-scrollbar {
+      display: none;
     }
     /* 宽屏用悬浮目录，内联（会推低正文）的就不显示了 */
     .toc-inline {
       display: none;
     }
   }
+
+  .toc-head {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    opacity: 0.6;
+  }
+  .toc-count {
+    margin-inline-start: auto;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .toc-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+  /* 每个二级标题之前空一点，把长清单切成「节」而不是 28 行连成一片灰墙 */
+  .toc-item.toc-h2 {
+    margin-top: 9px;
+  }
+  .toc-item.toc-h2:first-child {
+    margin-top: 0;
+  }
+
+  .toc-link {
+    display: flex;
+    align-items: flex-start;
+    gap: 4px;
+    padding: 2px 4px 2px 0;
+    font-size: 13.5px;
+    line-height: 1.5;
+    opacity: 0.85;
+    text-decoration: none;
+  }
+  .toc-link:hover {
+    color: var(--accent);
+    opacity: 1;
+  }
+  /* 三级标题：更小、更淡、再缩进一格 —— 层级用字号与淡度表达，不再加「·」 */
+  .toc-link.toc-sub {
+    padding-left: 12px;
+    font-size: 12.5px;
+    opacity: 0.6;
+  }
+  /* 最多两行：带代码片段的超长标题折三行会把整条清单压垮 */
+  .toc-text {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
   /* 当前阅读到的节：箭头 + accent 文字。
      箭头用隐藏占位而非条件渲染，避免高亮切换时整行文字左右抖一下。 */
   .toc-marker {
+    margin-top: 4px;
     visibility: hidden;
+  }
+  .toc-sub .toc-marker {
+    margin-top: 3px;
   }
   .toc-floating a.toc-active {
     color: var(--accent);
@@ -561,7 +636,15 @@ const olderEntry =
       if (atBottom) current = pairs[pairs.length - 1].el;
       for (const { link } of pairs) link.classList.remove("toc-active");
       const hit = pairs.find((p) => p.el === current);
-      if (hit) hit.link.classList.add("toc-active");
+      if (hit) {
+        hit.link.classList.add("toc-active");
+        // 节数多时侧栏自身要滚：让当前节始终待在侧栏可视区内。
+        // 只改侧栏的 scrollTop，不用 scrollIntoView —— 后者会连带滚页面。
+        const box = toc.getBoundingClientRect();
+        const row = hit.link.getBoundingClientRect();
+        if (row.top < box.top) toc.scrollTop += row.top - box.top - 8;
+        else if (row.bottom > box.bottom) toc.scrollTop += row.bottom - box.bottom + 8;
+      }
     }
 
     function onScroll() {
